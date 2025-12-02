@@ -13,6 +13,12 @@
         <property name="eachLine" value="true"/>
     </module>
 
+    <!-- Size Violations - must be under Checker, NOT TreeWalker -->
+    <module name="LineLength">
+        <property name="max" value="120"/>
+        <property name="ignorePattern" value="^package.*|^import.*"/>
+    </module>
+
     <module name="TreeWalker">
         <!-- Naming Conventions -->
         <module name="TypeName">
@@ -67,12 +73,7 @@
         <!-- Annotations -->
         <module name="MissingOverride"/>
 
-        <!-- Size Violations -->
-        <module name="LineLength">
-            <property name="max" value="120"/>
-            <property name="ignorePattern" value="^package.*|^import.*"/>
-        </module>
-
+        <!-- Method Size - stays under TreeWalker -->
         <module name="MethodLength">
             <property name="max" value="150"/>
         </module>
