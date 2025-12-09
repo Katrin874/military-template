@@ -1,0 +1,45 @@
+package ua.edu.viti.military.config;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.servers.Server;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
+
+@Configuration
+public class OpenApiConfig {
+
+    @Bean
+    public OpenAPI customOpenAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("Military Transport API - [Варіант B]")
+                        .version("1.0.0")
+                        .description(
+                                "REST API для системи управління військовим транспортом.\n\n" +
+                                        "**Функціональність:**\n" +
+                                        "- 🚛 Облік транспортних засобів (реєстрація, списання)\n" +
+                                        "- 🪪 Управління водіями та їх правами\n" +
+                                        "- 🛠 Контроль технічного обслуговування (ТО)\n" +
+                                        "- 🔍 Пошук техніки за пробігом, статусом та категорією\n\n" +
+                                        "**Технології:** Spring Boot 3, PostgreSQL, Spring Data JPA"
+                        )
+                        .contact(new Contact()
+                                .name("Курсант [Твоє Прізвище]")
+                                .email("student@viti.edu.ua")
+                        )
+                        .license(new License()
+                                .name("VITI Educational License")
+                        )
+                )
+                .servers(List.of(
+                        new Server()
+                                .url("http://localhost:8080")
+                                .description("Local Development Server")
+                ));
+    }
+}

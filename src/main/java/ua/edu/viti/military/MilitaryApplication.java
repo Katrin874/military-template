@@ -2,8 +2,10 @@ package ua.edu.viti.military;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing; // <--- 1. Перевір цей імпорт
 
 @SpringBootApplication
+@EnableJpaAuditing // <--- 2. ОСЬ ЦЬОГО НЕ ВИСТАЧАЄ!
 public class MilitaryApplication {
 
     public static void main(String[] args) {
