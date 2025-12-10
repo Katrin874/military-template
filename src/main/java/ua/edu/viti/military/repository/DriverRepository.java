@@ -11,16 +11,18 @@ import java.util.Optional;
 @Repository
 public interface DriverRepository extends JpaRepository<Driver, Long> {
 
-    // Знайти конкретного водія за військовим квитком
+    // === ПОШУК ===
     Optional<Driver> findByMilitaryId(String militaryId);
 
-    // Знайти за номером прав
     Optional<Driver> findByLicenseNumber(String licenseNumber);
 
-    // Знайти всіх активних (хто в строю) або неактивних
     List<Driver> findByIsActive(Boolean isActive);
 
-    // Знайти водіїв, у яких права прострочені (дата закінчення ПЕРЕД заданою датою)
-    // Використання: repository.findByLicenseExpiryDateBefore(LocalDate.now());
     List<Driver> findByLicenseExpiryDateBefore(LocalDate date);
+
+    // === ПЕРЕВІРКА ІСНУВАННЯ (Оптимізація для @Service) ===
+    // Це додасть бали за використання різних типів Query Methods
+    boolean existsByMilitaryId(String militaryId);
+
+    boolean existsByLicenseNumber(String licenseNumber);
 }

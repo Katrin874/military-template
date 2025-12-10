@@ -29,7 +29,7 @@ public class OpenApiConfig {
                                         "**Технології:** Spring Boot 3, PostgreSQL, Spring Data JPA"
                         )
                         .contact(new Contact()
-                                .name("Курсант [Твоє Прізвище]")
+                                .name("Курсант Чернікова")
                                 .email("student@viti.edu.ua")
                         )
                         .license(new License()

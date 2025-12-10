@@ -58,11 +58,11 @@ public class Vehicle {
 
     // === Зв'язки ===
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false)
     private VehicleCategory category;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "driver_id") // Може бути null
     private Driver driver;
 

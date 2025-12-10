@@ -21,11 +21,12 @@ import java.util.List;
 @RequestMapping("/api/vehicle-categories")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "1. Категорії техніки", description = "Управління довідником категорій")
+@Tag(name = "1. Категорії техніки", description = "Управління довідником категорій (A, B, C, Танки, БТР)")
 public class VehicleCategoryController {
 
     private final VehicleCategoryService categoryService;
 
+    // === CREATE ===
     @PostMapping
     @Operation(summary = "Створити нову категорію")
     @ApiResponses({
@@ -38,12 +39,14 @@ public class VehicleCategoryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(categoryService.create(dto));
     }
 
+    // === READ ALL ===
     @GetMapping
     @Operation(summary = "Отримати всі категорії")
     public ResponseEntity<List<VehicleCategoryResponseDTO>> getAll() {
         return ResponseEntity.ok(categoryService.getAll());
     }
 
+    // === READ ONE ===
     @GetMapping("/{id}")
     @Operation(summary = "Отримати категорію за ID")
     @ApiResponses({
@@ -54,11 +57,25 @@ public class VehicleCategoryController {
         return ResponseEntity.ok(categoryService.getById(id));
     }
 
-    // === ОСЬ ЦЕЙ МЕТОД МИ ДОДАЛИ ===
+    // === UPDATE (ЦЕ БУЛО ПРОПУЩЕНО) ===
+    @PutMapping("/{id}")
+    @Operation(summary = "Оновити назву або опис категорії")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Категорію оновлено"),
+            @ApiResponse(responseCode = "404", description = "Категорію не знайдено")
+    })
+    public ResponseEntity<VehicleCategoryResponseDTO> update(
+            @PathVariable Long id,
+            @Valid @RequestBody VehicleCategoryCreateDTO dto) { // Використовуємо той самий DTO, бо поля ті ж самі
+        log.info("REST request to update category ID: {}", id);
+        return ResponseEntity.ok(categoryService.update(id, dto));
+    }
+
+    // === DELETE ===
     @DeleteMapping("/{id}")
     @Operation(
             summary = "Видалити категорію",
-            description = "Видаляє категорію. УВАГА: Якщо до категорії прив'язана техніка, видалення буде заблоковано (помилка 500)."
+            description = "Видаляє категорію. УВАГА: Якщо до категорії прив'язана техніка, видалення буде заблоковано."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Категорію успішно видалено"),
@@ -69,7 +86,7 @@ public class VehicleCategoryController {
             @Parameter(description = "ID категорії") @PathVariable Long id) {
 
         log.info("REST request to delete category ID: {}", id);
-        categoryService.delete(id); // Викликаємо метод сервісу
-        return ResponseEntity.noContent().build(); // Повертаємо 204 No Content
+        categoryService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 }

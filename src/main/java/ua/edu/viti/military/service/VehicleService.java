@@ -11,6 +11,7 @@ import ua.edu.viti.military.dto.response.VehicleResponseDTO;
 import ua.edu.viti.military.entity.Driver;
 import ua.edu.viti.military.entity.Vehicle;
 import ua.edu.viti.military.entity.VehicleCategory;
+import ua.edu.viti.military.entity.VehicleStatus; // <--- Не забудь цей імпорт!
 import ua.edu.viti.military.exception.BusinessLogicException;
 import ua.edu.viti.military.exception.DuplicateResourceException;
 import ua.edu.viti.military.exception.ResourceNotFoundException;
@@ -97,21 +98,33 @@ public class VehicleService {
         return toDTO(vehicleRepository.save(vehicle));
     }
 
-    // === READ ===
-    public List<VehicleResponseDTO> getAll() {
-        return vehicleRepository.findAll().stream()
+    // === READ ALL (З ФІЛЬТРАЦІЄЮ) ===
+    // Змінено сигнатуру методу для підтримки фільтрації в контролері
+    public List<VehicleResponseDTO> getAll(VehicleStatus status) {
+        List<Vehicle> vehicles;
+
+        if (status != null) {
+            // Якщо статус передано - шукаємо тільки конкретні машини (напр. тільки справні)
+            vehicles = vehicleRepository.findByStatus(status);
+        } else {
+            // Якщо статус null - повертаємо абсолютно всі машини
+            // (Можна використати vehicleRepository.findAllWithDetails(), якщо ти додав цей метод для оптимізації)
+            vehicles = vehicleRepository.findAll();
+        }
+
+        return vehicles.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
 
+    // === READ ONE ===
     public VehicleResponseDTO getById(Long id) {
         return vehicleRepository.findById(id)
                 .map(this::toDTO)
                 .orElseThrow(() -> new ResourceNotFoundException("Машину з ID " + id + " не знайдено"));
     }
 
-    // Спец. метод: Знайти машини, яким потрібне ТО
-    // (Передбачається, що метод findVehiclesRequiringMaintenance реалізований в Repository за допомогою @Query)
+    // === SPECIFIC BUSINESS LOGIC ===
     public List<VehicleResponseDTO> getVehiclesRequiringMaintenance() {
         return vehicleRepository.findVehiclesRequiringMaintenance().stream()
                 .map(this::toDTO)
@@ -131,15 +144,11 @@ public class VehicleService {
 
     // === PRIVATE HELPERS ===
 
-    /**
-     * Допоміжний метод для перевірки та призначення водія.
-     * Винесено в окремий метод, щоб не дублювати код в create і update.
-     */
     private void assignDriverToVehicle(Vehicle vehicle, Long driverId) {
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new ResourceNotFoundException("Водія з ID " + driverId + " не знайдено"));
 
-        // Бізнес-правило: Не можна призначити неактивного водія
+        // правило: Не можна призначити неактивного водія
         if (Boolean.FALSE.equals(driver.getIsActive())) {
             throw new BusinessLogicException("Водій " + driver.getLastName() + " має статус 'Не активний' і не може бути призначений.");
         }
@@ -147,10 +156,6 @@ public class VehicleService {
         vehicle.setDriver(driver);
     }
 
-    /**
-     * Маппер Entity -> DTO.
-     * Якщо буде багато полів, краще винести в окремий клас VehicleMapper (MapStruct).
-     */
     private VehicleResponseDTO toDTO(Vehicle v) {
         // Мапимо категорію
         VehicleCategoryResponseDTO catDTO = new VehicleCategoryResponseDTO(

@@ -27,8 +27,12 @@ public class VehicleCategoryService {
     public VehicleCategoryResponseDTO create(VehicleCategoryCreateDTO dto) {
         log.info("Creating new category: {}", dto.getName());
 
-        if (categoryRepository.existsByName(dto.getName())) {
+        if (categoryRepository.existsByNameIgnoreCase(dto.getName())) {
             throw new DuplicateResourceException("Категорія з назвою '" + dto.getName() + "' вже існує");
+        }
+
+        if (dto.getCode() != null && categoryRepository.existsByCodeIgnoreCase(dto.getCode())) {
+            throw new DuplicateResourceException("Категорія з кодом '" + dto.getCode() + "' вже існує");
         }
 
         VehicleCategory category = new VehicleCategory();
@@ -38,11 +42,34 @@ public class VehicleCategoryService {
         category.setRequiredLicense(dto.getRequiredLicense());
         category.setMaxLoadCapacity(dto.getMaxLoadCapacity());
 
-        VehicleCategory saved = categoryRepository.save(category);
-        return toDTO(saved);
+        return toDTO(categoryRepository.save(category));
     }
 
-    // === DELETE (ЦЕЙ МЕТОД МИ ДОДАЛИ) ===
+    // === UPDATE ===
+    @Transactional
+    public VehicleCategoryResponseDTO update(Long id, VehicleCategoryCreateDTO dto) {
+        log.info("Updating category with ID: {}", id);
+
+        VehicleCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Категорію з ID " + id + " не знайдено"));
+
+        // Перевірка дубліката назви (Тільки якщо назва змінилася!)
+        if (!category.getName().equalsIgnoreCase(dto.getName()) &&
+                categoryRepository.existsByNameIgnoreCase(dto.getName())) {
+            throw new DuplicateResourceException("Категорія '" + dto.getName() + "' вже існує");
+        }
+
+        // Оновлюємо поля
+        category.setName(dto.getName());
+        category.setCode(dto.getCode());
+        category.setDescription(dto.getDescription());
+        category.setRequiredLicense(dto.getRequiredLicense());
+        category.setMaxLoadCapacity(dto.getMaxLoadCapacity());
+
+        return toDTO(categoryRepository.save(category));
+    }
+
+    // === DELETE ===
     @Transactional
     public void delete(Long id) {
         log.info("Deleting category with ID: {}", id);
@@ -51,8 +78,8 @@ public class VehicleCategoryService {
             throw new ResourceNotFoundException("Категорію з ID " + id + " не знайдено");
         }
 
-        // Спроба видалення.
-        // Якщо в цій категорії є машини, база даних кине виняток (DataIntegrityViolationException).
+        // Якщо до категорії прив'язані машини, БД викине DataIntegrityViolationException.
+        // Це обробить GlobalExceptionHandler (як 500 або 409).
         categoryRepository.deleteById(id);
     }
 

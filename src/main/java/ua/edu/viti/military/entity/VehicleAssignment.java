@@ -17,7 +17,7 @@ public class VehicleAssignment {
     @JoinColumn(name = "driver_id", nullable = false)
     private Driver driver;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
 

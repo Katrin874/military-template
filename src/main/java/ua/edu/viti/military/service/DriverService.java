@@ -5,13 +5,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ua.edu.viti.military.dto.request.DriverCreateDTO;
-import ua.edu.viti.military.dto.request.DriverUpdateDTO; // Додано імпорт
+import ua.edu.viti.military.dto.request.DriverUpdateDTO;
 import ua.edu.viti.military.dto.response.DriverResponseDTO;
 import ua.edu.viti.military.entity.Driver;
 import ua.edu.viti.military.exception.DuplicateResourceException;
 import ua.edu.viti.military.exception.ResourceNotFoundException;
 import ua.edu.viti.military.repository.DriverRepository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -26,10 +27,14 @@ public class DriverService {
     // === CREATE ===
     @Transactional
     public DriverResponseDTO create(DriverCreateDTO dto) {
-        log.info("Registering new driver with Military ID: {}", dto.getMilitaryId());
+        log.info("Реєстрація водія: {} {}", dto.getLastName(), dto.getFirstName());
 
-        if (driverRepository.findByMilitaryId(dto.getMilitaryId()).isPresent()) {
+        if (driverRepository.existsByMilitaryId(dto.getMilitaryId())) {
             throw new DuplicateResourceException("Водій з військовим квитком " + dto.getMilitaryId() + " вже існує");
+        }
+
+        if (driverRepository.existsByLicenseNumber(dto.getLicenseNumber())) {
+            throw new DuplicateResourceException("Водійське посвідчення " + dto.getLicenseNumber() + " вже зареєстроване");
         }
 
         Driver driver = new Driver();
@@ -47,14 +52,14 @@ public class DriverService {
         return toDTO(driverRepository.save(driver));
     }
 
-    // === UPDATE (Додано) ===
+    // === UPDATE ===
     @Transactional
     public DriverResponseDTO update(Long id, DriverUpdateDTO dto) {
-        log.info("Updating driver with ID: {}", id);
+        log.info("Оновлення даних водія ID: {}", id);
+
         Driver driver = driverRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Водія з ID " + id + " не знайдено"));
 
-        // Оновлюємо поля, якщо вони не null
         if (dto.getRank() != null) driver.setRank(dto.getRank());
         if (dto.getLicenseNumber() != null) driver.setLicenseNumber(dto.getLicenseNumber());
         if (dto.getLicenseCategories() != null) driver.setLicenseCategories(dto.getLicenseCategories());
@@ -62,44 +67,58 @@ public class DriverService {
         if (dto.getPhoneNumber() != null) driver.setPhoneNumber(dto.getPhoneNumber());
         if (dto.getIsActive() != null) driver.setIsActive(dto.getIsActive());
 
-        // Ім'я та військовий квиток зазвичай рідко змінюють, але можна додати за потребою
-
         return toDTO(driverRepository.save(driver));
     }
 
-    // === DELETE (Додано) ===
+    // === DELETE ===
     @Transactional
     public void delete(Long id) {
-        log.info("Deleting driver with ID: {}", id);
+        log.info("Видалення водія ID: {}", id);
 
         if (!driverRepository.existsById(id)) {
             throw new ResourceNotFoundException("Водія з ID " + id + " не знайдено");
         }
-
-        // Тут може виникнути помилка SQL, якщо у водія є техніка.
-        // Це очікувано (захист цілісності даних).
         driverRepository.deleteById(id);
     }
 
-    // === READ ===
-    public List<DriverResponseDTO> getAll() {
-        return driverRepository.findAll().stream()
+    // === READ ALL ===
+    public List<DriverResponseDTO> getAll(Boolean isActive) {
+        List<Driver> drivers;
+
+        if (isActive != null) {
+            drivers = driverRepository.findByIsActive(isActive);
+        } else {
+            drivers = driverRepository.findAll();
+        }
+
+        return drivers.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
 
+    // === READ ONE ===
     public DriverResponseDTO getById(Long id) {
         Driver driver = driverRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Водія не знайдено"));
         return toDTO(driver);
     }
 
+    // === SPECIFIC REPORT ===
+    public List<DriverResponseDTO> getDriversWithExpiredLicenses() {
+        return driverRepository.findByLicenseExpiryDateBefore(LocalDate.now())
+                .stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
+    // === MAPPER (Виправлено) ===
     private DriverResponseDTO toDTO(Driver entity) {
         return new DriverResponseDTO(
                 entity.getId(),
                 entity.getMilitaryId(),
                 entity.getFirstName(),
                 entity.getLastName(),
+                entity.getMiddleName(), // <--- ДОДАНО: По-батькові (було пропущено)
                 entity.getRank(),
                 entity.getLicenseNumber(),
                 entity.getLicenseCategories(),

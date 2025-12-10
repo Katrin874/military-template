@@ -25,7 +25,6 @@ public class VehicleCreateDTO {
     @Schema(description = "Державний номерний знак", example = "АА1234ВВ", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(groups = OnCreate.class, message = "Номерний знак обов'язковий")
     @Size(min = 4, max = 20, groups = OnCreate.class, message = "Номерний знак повинен містити від 4 до 20 символів")
-    // Тут можна додати @Pattern для перевірки формату номера, якщо потрібно
     private String registrationNumber;
 
     @Schema(description = "Номер двигуна", example = "YAMZ-238-76543", requiredMode = Schema.RequiredMode.REQUIRED)

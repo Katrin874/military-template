@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import ua.edu.viti.military.dto.request.VehicleCreateDTO;
 import ua.edu.viti.military.dto.request.VehicleUpdateDTO;
 import ua.edu.viti.military.dto.response.VehicleResponseDTO;
+import ua.edu.viti.military.entity.VehicleStatus;
 import ua.edu.viti.military.service.VehicleService;
 import ua.edu.viti.military.validation.OnCreate;
 
@@ -29,6 +30,7 @@ public class VehicleController {
 
     private final VehicleService vehicleService;
 
+    // === 1. CREATE ===
     @PostMapping
     @Operation(
             summary = "Поставити техніку на облік",
@@ -55,13 +57,22 @@ public class VehicleController {
         return ResponseEntity.status(HttpStatus.CREATED).body(vehicleService.create(dto));
     }
 
+    // === 2. GET ALL + FILTER ===
     @GetMapping
-    @Operation(summary = "Отримати список всієї техніки")
+    @Operation(
+            summary = "Отримати список техніки",
+            description = "Повертає список всіх машин. Можна фільтрувати за статусом (наприклад, ?status=OPERATIONAL)."
+    )
     @ApiResponse(responseCode = "200", description = "Список успішно отримано")
-    public ResponseEntity<List<VehicleResponseDTO>> getAll() {
-        return ResponseEntity.ok(vehicleService.getAll());
+    public ResponseEntity<List<VehicleResponseDTO>> getAll(
+            @Parameter(description = "Фільтр за статусом (необов'язково)")
+            @RequestParam(required = false) VehicleStatus status) {
+
+        log.info("REST request to get all vehicles. Filter status: {}", status);
+        return ResponseEntity.ok(vehicleService.getAll(status));
     }
 
+    // === 3. GET BY ID ===
     @GetMapping("/{id}")
     @Operation(summary = "Отримати техніку за ID")
     @ApiResponses({
@@ -72,6 +83,7 @@ public class VehicleController {
         return ResponseEntity.ok(vehicleService.getById(id));
     }
 
+    // === 4. UPDATE ===
     @PutMapping("/{id}")
     @Operation(
             summary = "Оновити дані техніки",
@@ -90,6 +102,7 @@ public class VehicleController {
         return ResponseEntity.ok(vehicleService.update(id, dto));
     }
 
+    // === 5. DELETE ===
     @DeleteMapping("/{id}")
     @Operation(
             summary = "Списати (видалити) техніку",
@@ -107,9 +120,10 @@ public class VehicleController {
         return ResponseEntity.noContent().build();
     }
 
+    // === 6. SPECIFIC ENDPOINT (Business Logic) ===
     @GetMapping("/requiring-maintenance")
     @Operation(
-            summary = "🔥 Техніка, що потребує ТО",
+            summary = "Звіт: Техніка, що потребує ТО",
             description = "Повертає список машин, у яких (поточний пробіг - пробіг останнього ТО) > інтервалу обслуговування."
     )
     @ApiResponse(responseCode = "200", description = "Список отримано успішно")

@@ -24,8 +24,10 @@ public class Driver {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // === Особисті дані ===
+
     @Column(nullable = false, unique = true, length = 50)
-    private String militaryId; // Номер військового квитка
+    private String militaryId; // Номер військового квитка (Унікальний)
 
     @Column(nullable = false, length = 100)
     private String firstName;
@@ -39,24 +41,34 @@ public class Driver {
     @Column(length = 50)
     private String rank; // Звання
 
-    @Column(unique = true, length = 50)
+    // === Дані водійського посвідчення (Обов'язкові) ===
+
+    @Column(nullable = false, unique = true, length = 50)
     private String licenseNumber; // Номер посвідчення
 
-    @Column(length = 50)
-    private String licenseCategories; // Категорії прав (напр. "B,C,CE")
+    @Column(nullable = false, length = 50)
+    private String licenseCategories; // Категорії (напр. "B, C, CE")
 
-    private LocalDate licenseExpiryDate; // Коли закінчуються права
+    @Column(nullable = false)
+    private LocalDate licenseExpiryDate; // Дата закінчення дії прав
+
+    // === Контакти та Статус ===
 
     @Column(length = 20)
     private String phoneNumber;
 
-    private Boolean isActive = true; // Чи в строю
+    @Column(nullable = false)
+    private Boolean isActive = true; // Статус (для Soft Delete)
 
-    // Зв'язок: Водій може мати історію закріплених машин
-    @OneToMany(mappedBy = "driver")
+    // === Зв'язки ===
+
+    // Один водій може бути закріплений за кількома машинами (історія)
+    // fetch = FetchType.LAZY — завантажуємо список тільки коли звертаємось до нього
+    @OneToMany(mappedBy = "driver", fetch = FetchType.LAZY)
     private List<Vehicle> assignedVehicles;
 
-    // Автоматичні дати
+    // === Аудит (Системні поля) ===
+
     @CreatedDate
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
