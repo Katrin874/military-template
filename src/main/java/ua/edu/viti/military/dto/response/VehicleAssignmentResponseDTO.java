@@ -1,16 +1,16 @@
 package ua.edu.viti.military.dto.response;
 
-import lombok.Builder;
 import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@Builder
 public class VehicleAssignmentResponseDTO {
     private Long id;
+    private String vehicleNumber;
     private String driverName;
-    private String vehicleModel;
-    private String registrationNumber;
-    private LocalDateTime startDate;
-    private boolean isActive;
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
+    private Integer startMileage;
+    private Integer endMileage;
+    private String status;
 }

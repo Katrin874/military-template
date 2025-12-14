@@ -2,6 +2,9 @@ package ua.edu.viti.military.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching; // <-- ДОДАНО: Для об'єднання операцій кешу
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ua.edu.viti.military.dto.request.VehicleCategoryCreateDTO;
@@ -9,10 +12,10 @@ import ua.edu.viti.military.dto.response.VehicleCategoryResponseDTO;
 import ua.edu.viti.military.entity.VehicleCategory;
 import ua.edu.viti.military.exception.DuplicateResourceException;
 import ua.edu.viti.military.exception.ResourceNotFoundException;
+import ua.edu.viti.military.mapper.VehicleCategoryMapper;
 import ua.edu.viti.military.repository.VehicleCategoryRepository;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -21,9 +24,11 @@ import java.util.stream.Collectors;
 public class VehicleCategoryService {
 
     private final VehicleCategoryRepository categoryRepository;
+    private final VehicleCategoryMapper categoryMapper;
 
     // === CREATE ===
     @Transactional
+    @CacheEvict(value = "vehicleCategories", key = "'all'") // Скидаємо кеш списку
     public VehicleCategoryResponseDTO create(VehicleCategoryCreateDTO dto) {
         log.info("Creating new category: {}", dto.getName());
 
@@ -35,18 +40,21 @@ public class VehicleCategoryService {
             throw new DuplicateResourceException("Категорія з кодом '" + dto.getCode() + "' вже існує");
         }
 
-        VehicleCategory category = new VehicleCategory();
-        category.setName(dto.getName());
-        category.setCode(dto.getCode());
-        category.setDescription(dto.getDescription());
-        category.setRequiredLicense(dto.getRequiredLicense());
-        category.setMaxLoadCapacity(dto.getMaxLoadCapacity());
+        // MapStruct: Перетворюємо DTO в Entity
+        VehicleCategory category = categoryMapper.toEntity(dto);
 
-        return toDTO(categoryRepository.save(category));
+        VehicleCategory saved = categoryRepository.save(category);
+
+        // MapStruct: Перетворюємо Entity в DTO
+        return categoryMapper.toResponseDTO(saved);
     }
 
     // === UPDATE ===
     @Transactional
+    @Caching(evict = { // ✅ ВИПРАВЛЕНО: Об'єднуємо два CacheEvict в один @Caching
+            @CacheEvict(value = "vehicleCategories", key = "#id"),
+            @CacheEvict(value = "vehicleCategories", key = "'all'")
+    })
     public VehicleCategoryResponseDTO update(Long id, VehicleCategoryCreateDTO dto) {
         log.info("Updating category with ID: {}", id);
 
@@ -59,18 +67,15 @@ public class VehicleCategoryService {
             throw new DuplicateResourceException("Категорія '" + dto.getName() + "' вже існує");
         }
 
-        // Оновлюємо поля
-        category.setName(dto.getName());
-        category.setCode(dto.getCode());
-        category.setDescription(dto.getDescription());
-        category.setRequiredLicense(dto.getRequiredLicense());
-        category.setMaxLoadCapacity(dto.getMaxLoadCapacity());
+        // MapStruct: Оновлюємо Entity з DTO
+        categoryMapper.updateEntityFromDTO(dto, category);
 
-        return toDTO(categoryRepository.save(category));
+        return categoryMapper.toResponseDTO(categoryRepository.save(category));
     }
 
     // === DELETE ===
     @Transactional
+    @CacheEvict(value = "vehicleCategories", allEntries = true) // Скидаємо весь кеш категорій
     public void delete(Long id) {
         log.info("Deleting category with ID: {}", id);
 
@@ -78,36 +83,27 @@ public class VehicleCategoryService {
             throw new ResourceNotFoundException("Категорію з ID " + id + " не знайдено");
         }
 
-        // Якщо до категорії прив'язані машини, БД викине DataIntegrityViolationException.
-        // Це обробить GlobalExceptionHandler (як 500 або 409).
         categoryRepository.deleteById(id);
     }
 
     // === READ ALL ===
+    @Cacheable(value = "vehicleCategories", key = "'all'") // Кешуємо список
     public List<VehicleCategoryResponseDTO> getAll() {
-        return categoryRepository.findAll().stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+        log.info("Fetching all categories from database (potential cache miss)");
+
+        // MapStruct: Перетворюємо List<Entity> в List<DTO>
+        return categoryMapper.toResponseDTOList(categoryRepository.findAll());
     }
 
     // === READ BY ID ===
+    @Cacheable(value = "vehicleCategories", key = "#id") // Кешуємо по ID
     public VehicleCategoryResponseDTO getById(Long id) {
+        log.info("Fetching category by ID: {} (potential cache miss)", id);
+
         VehicleCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Категорію з ID " + id + " не знайдено"));
-        return toDTO(category);
-    }
 
-    // Ручний мапер (Entity -> DTO)
-    private VehicleCategoryResponseDTO toDTO(VehicleCategory entity) {
-        return new VehicleCategoryResponseDTO(
-                entity.getId(),
-                entity.getName(),
-                entity.getCode(),
-                entity.getDescription(),
-                entity.getRequiredLicense(),
-                entity.getMaxLoadCapacity(),
-                entity.getCreatedAt(),
-                entity.getUpdatedAt()
-        );
+        // MapStruct: Перетворюємо Entity в DTO
+        return categoryMapper.toResponseDTO(category);
     }
 }

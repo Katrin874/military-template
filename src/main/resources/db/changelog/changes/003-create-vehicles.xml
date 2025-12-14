@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="003-create-vehicles" author="cadet">
+        <createTable tableName="vehicles">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="registration_number" type="VARCHAR(20)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="brand" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="year_of_manufacture" type="INT"/>
+            <column name="mileage" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="category_id" type="BIGINT"/>
+            <column name="driver_id" type="BIGINT"/>
+
+            <column name="engine_number" type="VARCHAR(50)"/>
+            <column name="chassis_number" type="VARCHAR(50)"/>
+            <column name="fuel_type" type="VARCHAR(20)"/>
+            <column name="maintenance_interval_km" type="INT"/>
+            <column name="last_maintenance_date" type="DATE"/>
+            <column name="last_maintenance_mileage" type="INT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="vehicles" baseColumnNames="category_id"
+                                 referencedTableName="vehicle_categories" referencedColumnNames="id"
+                                 constraintName="fk_vehicle_category" onDelete="SET NULL"/>
+
+        <addForeignKeyConstraint baseTableName="vehicles" baseColumnNames="driver_id"
+                                 referencedTableName="drivers" referencedColumnNames="id"
+                                 constraintName="fk_vehicle_driver" onDelete="SET NULL"/>
+    </changeSet>
+</databaseChangeLog>

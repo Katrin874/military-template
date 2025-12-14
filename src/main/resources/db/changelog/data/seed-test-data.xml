@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="seed-002-test-data" author="cadet">
+        <insert tableName="drivers">
+            <column name="first_name" value="Іван"/>
+            <column name="last_name" value="Петренко"/>
+            <column name="rank" value="Сержант"/>
+            <column name="license_number" value="ABC123456"/>
+            <column name="category" value="C"/>
+            <column name="status" value="ACTIVE"/>
+        </insert>
+
+        <insert tableName="vehicles">
+            <column name="brand" value="КрАЗ"/>
+            <column name="model" value="6322"/>
+            <column name="registration_number" value="3344-Б1"/>
+            <column name="year_of_manufacture" value="2010"/>
+            <column name="mileage" value="5000"/>
+            <column name="status" value="AVAILABLE"/>
+
+            <column name="engine_number" value="YAMZ-238-001"/>
+            <column name="chassis_number" value="KR-6322-00987"/>
+            <column name="fuel_type" value="DIESEL"/>
+            <column name="maintenance_interval_km" value="10000"/>
+
+            <column name="category_id" value="1"/>
+            <column name="driver_id" value="1"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

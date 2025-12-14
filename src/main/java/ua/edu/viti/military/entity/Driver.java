@@ -2,6 +2,7 @@ package ua.edu.viti.military.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
@@ -10,69 +11,70 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Entity
 @Table(name = "drivers")
-@EntityListeners(AuditingEntityListener.class)
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
 public class Driver {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // === Особисті дані ===
+    @Column(name = "military_id", unique = true) // Нове поле
+    private String militaryId;
 
-    @Column(nullable = false, unique = true, length = 50)
-    private String militaryId; // Номер військового квитка (Унікальний)
-
-    @Column(nullable = false, length = 100)
+    @Column(name = "first_name", nullable = false)
     private String firstName;
 
-    @Column(nullable = false, length = 100)
+    @Column(name = "last_name", nullable = false)
     private String lastName;
 
-    @Column(length = 100)
+    @Column(name = "middle_name") // Нове поле
     private String middleName;
 
-    @Column(length = 50)
-    private String rank; // Звання
+    @Column(nullable = false)
+    private String rank;
 
-    // === Дані водійського посвідчення (Обов'язкові) ===
-
-    @Column(nullable = false, unique = true, length = 50)
-    private String licenseNumber; // Номер посвідчення
-
-    @Column(nullable = false, length = 50)
-    private String licenseCategories; // Категорії (напр. "B, C, CE")
+    @Column(name = "license_number", nullable = false, unique = true)
+    private String licenseNumber;
 
     @Column(nullable = false)
-    private LocalDate licenseExpiryDate; // Дата закінчення дії прав
+    private String category;
 
-    // === Контакти та Статус ===
+    @Column(name = "license_categories") // Нове поле
+    private String licenseCategories;
 
-    @Column(length = 20)
-    private String phoneNumber;
+    @Column(name = "license_expiry_date") // 🔥 КРИТИЧНО ВАЖЛИВЕ ПОЛЕ ДЛЯ ЗВІТУ
+    private LocalDate licenseExpiryDate;
 
     @Column(nullable = false)
-    private Boolean isActive = true; // Статус (для Soft Delete)
-
-    // === Зв'язки ===
-
-    // Один водій може бути закріплений за кількома машинами (історія)
-    // fetch = FetchType.LAZY — завантажуємо список тільки коли звертаємось до нього
-    @OneToMany(mappedBy = "driver", fetch = FetchType.LAZY)
-    private List<Vehicle> assignedVehicles;
-
-    // === Аудит (Системні поля) ===
+    private String status; // ACTIVE, INACTIVE
 
     @CreatedDate
-    @Column(nullable = false, updatable = false)
+    @Column(updatable = false)
     private LocalDateTime createdAt;
 
     @LastModifiedDate
     private LocalDateTime updatedAt;
+
+    public boolean getIsActive() {
+        return "ACTIVE".equalsIgnoreCase(this.status);
+    }
+
+    /**
+     * Helper-метод для отримання повного імені водія.
+     */
+    public String getFullName() {
+        // Форматуємо: Прізвище Ім'я По батькові
+        return String.format("%s %s %s",
+                this.lastName,
+                this.firstName,
+                (this.middleName != null ? this.middleName : "")
+        ).trim();
+    }
 }

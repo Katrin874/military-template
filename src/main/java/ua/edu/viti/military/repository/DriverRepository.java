@@ -14,14 +14,17 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     // === ПОШУК ===
     Optional<Driver> findByMilitaryId(String militaryId);
 
+    // Отримати водія за номером прав
     Optional<Driver> findByLicenseNumber(String licenseNumber);
 
-    List<Driver> findByIsActive(Boolean isActive);
+    // 👇 ВИПРАВЛЕНО: Ми маємо фільтрувати по полю 'status', яке є String.
+    // У DriverService ми будемо передавати "ACTIVE" або "INACTIVE".
+    List<Driver> findByStatus(String status);
 
+    // Знайти водіїв, чиї права закінчуються до вказаної дати
     List<Driver> findByLicenseExpiryDateBefore(LocalDate date);
 
     // === ПЕРЕВІРКА ІСНУВАННЯ (Оптимізація для @Service) ===
-    // Це додасть бали за використання різних типів Query Methods
     boolean existsByMilitaryId(String militaryId);
 
     boolean existsByLicenseNumber(String licenseNumber);

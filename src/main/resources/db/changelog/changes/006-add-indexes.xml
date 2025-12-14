@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="006-add-indexes" author="cadet">
+        <comment>Індекси для прискорення пошуку</comment>
+
+        <createIndex indexName="idx_vehicle_reg_number" tableName="vehicles">
+            <column name="registration_number"/>
+        </createIndex>
+
+        <createIndex indexName="idx_vehicle_status" tableName="vehicles">
+            <column name="status"/>
+        </createIndex>
+
+        <createIndex indexName="idx_driver_lastname" tableName="drivers">
+            <column name="last_name"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

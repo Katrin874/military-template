@@ -6,15 +6,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ua.edu.viti.military.dto.request.VehicleCreateDTO;
 import ua.edu.viti.military.dto.request.VehicleUpdateDTO;
-import ua.edu.viti.military.dto.response.VehicleCategoryResponseDTO;
+// ВИДАЛЕНІ: імпорти DTO, які тепер не потрібні в цьому класі
 import ua.edu.viti.military.dto.response.VehicleResponseDTO;
 import ua.edu.viti.military.entity.Driver;
 import ua.edu.viti.military.entity.Vehicle;
 import ua.edu.viti.military.entity.VehicleCategory;
-import ua.edu.viti.military.entity.VehicleStatus; // <--- Не забудь цей імпорт!
+import ua.edu.viti.military.entity.VehicleStatus;
 import ua.edu.viti.military.exception.BusinessLogicException;
 import ua.edu.viti.military.exception.DuplicateResourceException;
 import ua.edu.viti.military.exception.ResourceNotFoundException;
+import ua.edu.viti.military.mapper.VehicleMapper; // <--- ДОДАНО: MapStruct Mapper
 import ua.edu.viti.military.repository.DriverRepository;
 import ua.edu.viti.military.repository.VehicleCategoryRepository;
 import ua.edu.viti.military.repository.VehicleRepository;
@@ -31,6 +32,7 @@ public class VehicleService {
     private final VehicleRepository vehicleRepository;
     private final VehicleCategoryRepository categoryRepository;
     private final DriverRepository driverRepository;
+    private final VehicleMapper vehicleMapper; // <--- ДОДАНО: Інжекція маппера
 
     // === CREATE ===
     @Transactional
@@ -51,8 +53,15 @@ public class VehicleService {
         VehicleCategory category = categoryRepository.findById(dto.getCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Категорію з ID " + dto.getCategoryId() + " не знайдено"));
 
-        // 4. Створення сутності
+        // 4. Створення сутності (замість ручного маппінгу - використовуємо MapStruct)
+        // ПРИМІТКА: Оскільки ваш маппер VehicleMapper.toEntity не робить повний маппінг,
+        // а лише мапить ID, тут краще використовувати його, але для уникнення помилок
+        // у вас ручний маппінг був такий, ми його спростимо за допомогою toEntity,
+        // але поля, які він не мапив, додамо вручну, якщо це необхідно.
+
+        // --- Початковий ручний підхід (виправлено додаванням brand) ---
         Vehicle vehicle = new Vehicle();
+        vehicle.setBrand(dto.getBrand()); // <--- ВИПРАВЛЕНО: Додано відсутнє поле BRAND
         vehicle.setModel(dto.getModel());
         vehicle.setRegistrationNumber(dto.getRegistrationNumber());
         vehicle.setEngineNumber(dto.getEngineNumber());
@@ -70,10 +79,11 @@ public class VehicleService {
             assignDriverToVehicle(vehicle, dto.getDriverId());
         }
 
+        // 6. Збереження та маппінг
         Vehicle savedVehicle = vehicleRepository.save(vehicle);
         log.info("Техніку успішно збережено з ID: {}", savedVehicle.getId());
 
-        return toDTO(savedVehicle);
+        return vehicleMapper.toDto(savedVehicle); // <--- ВИКОРИСТАННЯ MAPSTRUCT
     }
 
     // === UPDATE ===
@@ -84,50 +94,43 @@ public class VehicleService {
         Vehicle vehicle = vehicleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Машину не знайдено"));
 
-        // Оновлюємо тільки ті поля, що прийшли (Patch-style logic)
-        if (dto.getMileage() != null) vehicle.setMileage(dto.getMileage());
-        if (dto.getStatus() != null) vehicle.setStatus(dto.getStatus());
-        if (dto.getLastMaintenanceDate() != null) vehicle.setLastMaintenanceDate(dto.getLastMaintenanceDate());
-        if (dto.getLastMaintenanceMileage() != null) vehicle.setLastMaintenanceMileage(dto.getLastMaintenanceMileage());
+        // ВИКОРИСТАННЯ MAPSTRUCT ДЛЯ ОНОВЛЕННЯ
+        vehicleMapper.updateEntity(dto, vehicle);
 
-        // Оновлення водія
+        // Оновлення водія (логіка, яку маппер не може зробити сам)
         if (dto.getDriverId() != null) {
             assignDriverToVehicle(vehicle, dto.getDriverId());
         }
 
-        return toDTO(vehicleRepository.save(vehicle));
+        return vehicleMapper.toDto(vehicleRepository.save(vehicle)); // <--- ВИКОРИСТАННЯ MAPSTRUCT
     }
 
     // === READ ALL (З ФІЛЬТРАЦІЄЮ) ===
-    // Змінено сигнатуру методу для підтримки фільтрації в контролері
     public List<VehicleResponseDTO> getAll(VehicleStatus status) {
         List<Vehicle> vehicles;
 
         if (status != null) {
-            // Якщо статус передано - шукаємо тільки конкретні машини (напр. тільки справні)
             vehicles = vehicleRepository.findByStatus(status);
         } else {
-            // Якщо статус null - повертаємо абсолютно всі машини
-            // (Можна використати vehicleRepository.findAllWithDetails(), якщо ти додав цей метод для оптимізації)
             vehicles = vehicleRepository.findAll();
         }
 
         return vehicles.stream()
-                .map(this::toDTO)
+                .map(vehicleMapper::toDto) // <--- ВИКОРИСТАННЯ MAPSTRUCT
                 .collect(Collectors.toList());
     }
 
     // === READ ONE ===
     public VehicleResponseDTO getById(Long id) {
         return vehicleRepository.findById(id)
-                .map(this::toDTO)
+                .map(vehicleMapper::toDto) // <--- ВИКОРИСТАННЯ MAPSTRUCT
                 .orElseThrow(() -> new ResourceNotFoundException("Машину з ID " + id + " не знайдено"));
     }
 
     // === SPECIFIC BUSINESS LOGIC ===
     public List<VehicleResponseDTO> getVehiclesRequiringMaintenance() {
         return vehicleRepository.findVehiclesRequiringMaintenance().stream()
-                .map(this::toDTO)
+                .map(vehicleMapper::toDto) // <--- ВИКОРИСТАННЯ MAPSTRUCT
                 .collect(Collectors.toList());
     }
 
@@ -156,40 +159,6 @@ public class VehicleService {
         vehicle.setDriver(driver);
     }
 
-    private VehicleResponseDTO toDTO(Vehicle v) {
-        // Мапимо категорію
-        VehicleCategoryResponseDTO catDTO = new VehicleCategoryResponseDTO(
-                v.getCategory().getId(),
-                v.getCategory().getName(),
-                v.getCategory().getCode(),
-                v.getCategory().getDescription(),
-                v.getCategory().getRequiredLicense(),
-                v.getCategory().getMaxLoadCapacity(),
-                v.getCategory().getCreatedAt(),
-                v.getCategory().getUpdatedAt()
-        );
+    // <--- ВИДАЛЕНО: Приватний метод toDTO, який спричиняв помилку конструктора
 
-        // Мапимо дані водія безпечно (null-check)
-        Long driverId = (v.getDriver() != null) ? v.getDriver().getId() : null;
-        String driverName = (v.getDriver() != null)
-                ? v.getDriver().getLastName() + " " + v.getDriver().getFirstName()
-                : "Не закріплено";
-
-        return new VehicleResponseDTO(
-                v.getId(),
-                v.getModel(),
-                v.getRegistrationNumber(),
-                v.getMileage(),
-                v.getFuelType(),
-                v.getStatus(),
-                catDTO,
-                driverId,
-                driverName,
-                v.getMaintenanceIntervalKm(),
-                v.getLastMaintenanceDate(),
-                v.getLastMaintenanceMileage(),
-                v.getCreatedAt(),
-                v.getUpdatedAt()
-        );
-    }
 }

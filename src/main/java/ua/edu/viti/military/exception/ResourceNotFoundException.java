@@ -1,7 +1,7 @@
-package ua.edu.viti.military.exception;
+    package ua.edu.viti.military.exception;
 
-public class ResourceNotFoundException extends BaseException {
-    public ResourceNotFoundException(String message) {
-        super(message);
+    public class ResourceNotFoundException extends BaseException {
+        public ResourceNotFoundException(String message) {
+            super(message);
+        }
     }
-}

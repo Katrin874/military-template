@@ -1,9 +1,12 @@
 package ua.edu.viti.military.config;
 
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,7 +29,7 @@ public class OpenApiConfig {
                                         "- 🪪 Управління водіями та їх правами\n" +
                                         "- 🛠 Контроль технічного обслуговування (ТО)\n" +
                                         "- 🔍 Пошук техніки за пробігом, статусом та категорією\n\n" +
-                                        "**Технології:** Spring Boot 3, PostgreSQL, Spring Data JPA"
+                                        "**Безпека:** Використовується JWT Token. Натисніть кнопку 'Authorize' і введіть токен."
                         )
                         .contact(new Contact()
                                 .name("Курсант Чернікова")
@@ -40,6 +43,18 @@ public class OpenApiConfig {
                         new Server()
                                 .url("http://localhost:8080")
                                 .description("Local Development Server")
-                ));
+                ))
+                // === НАЛАШТУВАННЯ JWT (Кнопка "Authorize") ===
+                .addSecurityItem(new SecurityRequirement().addList("Bearer Authentication"))
+                .components(new Components()
+                        .addSecuritySchemes("Bearer Authentication", createSecurityScheme()));
+    }
+
+    private SecurityScheme createSecurityScheme() {
+        return new SecurityScheme()
+                .name("Bearer Authentication")
+                .type(SecurityScheme.Type.HTTP)
+                .scheme("bearer")
+                .bearerFormat("JWT");
     }
 }

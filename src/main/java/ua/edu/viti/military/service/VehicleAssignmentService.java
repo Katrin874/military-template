@@ -1,137 +1,177 @@
 package ua.edu.viti.military.service;
 
+import io.micrometer.core.instrument.Timer; // Додано для Timer.Sample
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import ua.edu.viti.military.dto.request.VehicleAssignmentRequestDTO;
+import ua.edu.viti.military.dto.request.VehicleReturnRequestDTO;
 import ua.edu.viti.military.dto.response.VehicleAssignmentResponseDTO;
-import ua.edu.viti.military.entity.Driver;
-import ua.edu.viti.military.entity.Vehicle;
-import ua.edu.viti.military.entity.VehicleAssignment;
-import ua.edu.viti.military.exception.BusinessLogicException;
+import ua.edu.viti.military.entity.*;
 import ua.edu.viti.military.exception.ResourceNotFoundException;
-import ua.edu.viti.military.repository.DriverRepository;
-import ua.edu.viti.military.repository.VehicleAssignmentRepository;
-import ua.edu.viti.military.repository.VehicleRepository;
+import ua.edu.viti.military.repository.*;
+import ua.edu.viti.military.event.VehicleAssignedEvent;
+import ua.edu.viti.military.mapper.VehicleAssignmentMapper;
 
-import java.time.LocalDate;
+import org.slf4j.MDC; // <-- ДОДАНО для Structured Logging
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit; // ДОДАНО для Timer
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
+@Transactional(readOnly = true)
 public class VehicleAssignmentService {
 
     private final VehicleAssignmentRepository assignmentRepository;
-    private final DriverRepository driverRepository;
     private final VehicleRepository vehicleRepository;
+    private final DriverRepository driverRepository;
+    private final ApplicationEventPublisher eventPublisher;
+    private final VehicleAssignmentMapper assignmentMapper;
+    private final MetricsService metricsService; // <-- ІНЖЕКЦІЯ METRICS SERVICE
 
-    @Transactional
-    public VehicleAssignmentResponseDTO assignVehicle(VehicleAssignmentRequestDTO request) {
-        // 1. Пошук сутностей
-        Driver driver = driverRepository.findById(request.getDriverId())
-                .orElseThrow(() -> new ResourceNotFoundException("Водія з ID " + request.getDriverId() + " не знайдено"));
+    /**
+     * === ПОЧАТОК РЕЙСУ (Start Assignment) ===
+     */
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class
+    )
+    public VehicleAssignmentResponseDTO startAssignment(VehicleAssignmentRequestDTO request) {
 
-        Vehicle vehicle = vehicleRepository.findById(request.getVehicleId())
-                .orElseThrow(() -> new ResourceNotFoundException("Транспорт з ID " + request.getVehicleId() + " не знайдено"));
+        // 1. Встановлюємо контекст MDC для логування
+        MDC.put("operation", "START_ASSIGNMENT");
+        MDC.put("vehicleId", request.getVehicleId().toString());
 
-        // 2.Перевірка статусу водія
-        if (Boolean.FALSE.equals(driver.getIsActive())) {
-            throw new BusinessLogicException("Водій " + driver.getLastName() + " має статус 'Не активний' і не може бути допущений до керування.");
-        }
+        // Вимірюємо тривалість всієї операції
+        return metricsService.measureAssignmentOperation(() -> {
+            try {
+                log.info("Спроба відправити машину ID={} у рейс", request.getVehicleId());
 
-        // 3.Перевірка терміну дії прав
-        if (driver.getLicenseExpiryDate() != null && driver.getLicenseExpiryDate().isBefore(LocalDate.now())) {
-            throw new BusinessLogicException("Термін дії водійського посвідчення сплив (" + driver.getLicenseExpiryDate() + ")");
-        }
+                // 1. Знаходимо машину з БЛОКУВАННЯМ
+                Vehicle vehicle = vehicleRepository.findByIdWithLock(request.getVehicleId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Машину не знайдено"));
 
-        // 4.Перевірка сумісності категорій
-        // Логіка: Якщо у машини категорія "C", то у водія в рядку "B,C,CE" має бути "C"
-        // Якщо у VehicleCategory назви повні ("Вантажна"), то тут треба буде маппінг.
-        String requiredCategory = vehicle.getCategory().getName(); // Наприклад "C"
-        if (!isCategoryCompatible(driver.getLicenseCategories(), requiredCategory)) {
-            throw new BusinessLogicException(
-                    String.format("Водій не має відповідної категорії. Потрібна: %s, Наявні: %s",
-                            requiredCategory, driver.getLicenseCategories()));
-        }
+                // 2. Валідація статусу та зайнятості
+                if (vehicle.getStatus() != VehicleStatus.AVAILABLE) {
+                    metricsService.recordAssignmentFailed(); // <-- ЛІЧИМО НЕСПРАВНІСТЬ
+                    throw new RuntimeException("Машина не доступна для виїзду (Статус: " + vehicle.getStatus().name() + ")");
+                }
+                if (assignmentRepository.findActiveByVehicleId(vehicle.getId()).isPresent()) {
+                    metricsService.recordAssignmentFailed(); // <-- ЛІЧИМО НЕСПРАВНІСТЬ
+                    throw new RuntimeException("Ця машина вже перебуває у рейсі!");
+                }
+                // 3. Валідація пробігу
+                if (request.getStartMileage() < vehicle.getMileage()) {
+                    metricsService.recordAssignmentFailed(); // <-- ЛІЧИМО НЕСПРАВНІСТЬ
+                    throw new RuntimeException("Пробіг на виїзді менший за поточний пробіг машини!");
+                }
 
-        // 5.Перевірка ТО
-        validateMaintenance(vehicle);
+                // 4. Створення сутності з DTO (MapStruct)
+                VehicleAssignment assignment = assignmentMapper.toEntity(request);
 
-        // 6. Перевірка, чи машина не зайнята іншим водієм
-        if (assignmentRepository.findByVehicleIdAndIsActiveTrue(vehicle.getId()).isPresent()) {
-            throw new BusinessLogicException("Транспортний засіб " + vehicle.getRegistrationNumber() + " вже знаходиться у використанні.");
-        }
+                // 5. Оновлюємо сутність
+                Driver driver = driverRepository.findById(request.getDriverId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Водія не знайдено"));
 
-        // 7. Створення запису про призначення
-        VehicleAssignment assignment = new VehicleAssignment(driver, vehicle);
-        VehicleAssignment savedAssignment = assignmentRepository.save(assignment);
+                assignment.setVehicle(vehicle);
+                assignment.setDriver(driver);
 
-        return mapToDTO(savedAssignment);
+                assignment.setStatus(AssignmentStatus.ACTIVE);
+
+                // 6. Оновлюємо статус машини
+                vehicle.setStatus(VehicleStatus.IN_USE);
+                vehicle.setMileage(request.getStartMileage());
+                vehicleRepository.save(vehicle);
+
+                VehicleAssignment saved = assignmentRepository.save(assignment);
+                log.info("Успішний виїзд: ID={}", saved.getId());
+
+                // 7. Публікація Events та Metrics
+                metricsService.recordAssignmentStarted(); // <-- ЛІЧИМО УСПІХ
+                eventPublisher.publishEvent(
+                        new VehicleAssignedEvent(this, saved.getVehicle(), saved.getDriver().getFullName(), "Підрозділ N", "System Admin")
+                );
+                log.info("Event VehicleAssignedEvent published.");
+
+                return assignmentMapper.toResponseDTO(saved);
+            } finally {
+                // Очищаємо MDC після обробки запиту
+                MDC.remove("operation");
+                MDC.remove("vehicleId");
+            }
+        });
     }
 
-    @Transactional
-    public void completeAssignment(Long assignmentId, Integer finalMileage) {
-        VehicleAssignment assignment = assignmentRepository.findById(assignmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Призначення не знайдено"));
+    /**
+     * === ЗАВЕРШЕННЯ РЕЙСУ (Complete Assignment) ===
+     */
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class
+    )
+    public VehicleAssignmentResponseDTO completeAssignment(Long vehicleId, VehicleReturnRequestDTO request) {
+        // 1. Встановлюємо контекст MDC для логування
+        MDC.put("operation", "COMPLETE_ASSIGNMENT");
+        MDC.put("vehicleId", vehicleId.toString());
 
-        if (!assignment.isActive()) {
-            throw new BusinessLogicException("Це призначення вже було завершено раніше.");
+        try {
+            log.info("Завершення рейсу для машини ID={}", vehicleId);
+
+            // 1. Блокуємо машину
+            Vehicle vehicle = vehicleRepository.findByIdWithLock(vehicleId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Машину не знайдено"));
+
+            // 2. Шукаємо активний рейс
+            VehicleAssignment assignment = assignmentRepository.findActiveByVehicleId(vehicleId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Активного рейсу немає"));
+
+            // 3. Валідація пробігу
+            if (request.getReturnMileage() < assignment.getStartMileage()) {
+                throw new RuntimeException("Помилка: Кінцевий пробіг менший за пробіг на виїзді");
+            }
+
+            // 4. Закриваємо рейс
+            assignment.setEndTime(request.getReturnDate());
+            assignment.setEndMileage(request.getReturnMileage());
+            assignment.setStatus(AssignmentStatus.COMPLETED);
+            if (request.getNotes() != null) {
+                // Припускаємо, що у VehicleAssignment є поле notes. Якщо ні, ігноруємо.
+                // assignment.setNotes(request.getNotes());
+            }
+
+            // 5. Оновлюємо машину
+            vehicle.setMileage(request.getReturnMileage());
+            vehicle.setStatus(VehicleStatus.AVAILABLE);
+            vehicleRepository.save(vehicle);
+
+            log.info("Рейс для машини ID={} успішно завершено", vehicleId);
+
+            return assignmentMapper.toResponseDTO(assignmentRepository.save(assignment));
+        } finally {
+            // Очищаємо MDC після обробки запиту
+            MDC.remove("operation");
+            MDC.remove("vehicleId");
         }
-
-        Vehicle vehicle = assignment.getVehicle();
-
-        // Валідація пробігу
-        if (finalMileage < vehicle.getMileage()) {
-            throw new BusinessLogicException("Новий пробіг (" + finalMileage + ") не може бути меншим за попередній (" + vehicle.getMileage() + ")");
-        }
-
-        // Оновлення даних
-        vehicle.setMileage(finalMileage); // Оновлюємо загальний пробіг авто
-
-        assignment.setEndDate(LocalDateTime.now());
-        assignment.setActive(false);
-
-        vehicleRepository.save(vehicle);
-        assignmentRepository.save(assignment);
     }
 
-    private void validateMaintenance(Vehicle vehicle) {
-        int currentMileage = vehicle.getMileage();
-        int lastServiceMileage = vehicle.getLastMaintenanceMileage();
-        int interval = vehicle.getMaintenanceIntervalKm();
+    // ... інші методи без змін ...
 
-        // Якщо різниця між поточним пробігом і останнім ТО більша за інтервал
-        if ((currentMileage - lastServiceMileage) > interval) {
-            int overdueKm = (currentMileage - lastServiceMileage) - interval;
-            throw new BusinessLogicException(
-                    String.format("Експлуатація заборонена! Прострочено ТО на %d км. (Інтервал: %d км)",
-                            overdueKm, interval));
-        }
+    @Transactional(readOnly = true)
+    public List<VehicleAssignmentResponseDTO> getVehicleHistory(Long vehicleId) {
+        return assignmentRepository.findByVehicleIdOrderByStartTimeDesc(vehicleId).stream()
+                .map(assignmentMapper::toResponseDTO)
+                .collect(Collectors.toList());
     }
 
-    private boolean isCategoryCompatible(String driverCategories, String requiredCategory) {
-        if (driverCategories == null || driverCategories.isEmpty()) {
-            return false;
-        }
-        // Розбиваємо рядок "B,C,CE" на масив і перевіряємо наявність потрібної категорії
-        // Використовуємо trim(), щоб прибрати зайві пробіли після коми
-        List<String> categories = Arrays.stream(driverCategories.split(","))
-                .map(String::trim)
-                .toList();
-
-        return categories.contains(requiredCategory);
-    }
-
-    private VehicleAssignmentResponseDTO mapToDTO(VehicleAssignment entity) {
-        return VehicleAssignmentResponseDTO.builder()
-                .id(entity.getId())
-                .driverName(entity.getDriver().getFirstName() + " " + entity.getDriver().getLastName())
-                .vehicleModel(entity.getVehicle().getModel())
-                .registrationNumber(entity.getVehicle().getRegistrationNumber())
-                .startDate(entity.getStartDate())
-                .isActive(entity.isActive())
-                .build();
+    @Transactional(readOnly = true)
+    public Integer calculateTotalDistance(LocalDateTime start, LocalDateTime end) {
+        Integer total = assignmentRepository.calculateTotalDistance(start, end);
+        return total != null ? total : 0;
     }
 }

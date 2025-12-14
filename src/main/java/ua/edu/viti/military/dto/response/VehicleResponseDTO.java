@@ -19,7 +19,11 @@ public class VehicleResponseDTO {
     @Schema(description = "Унікальний ID техніки", example = "55")
     private Long id;
 
-    @Schema(description = "Модель", example = "КрАЗ-6322")
+    // ДОДАНО: Поле 'brand' (Марка) - було відсутнє у попередньому варіанті
+    @Schema(description = "Марка (виробник) техніки", example = "КрАЗ")
+    private String brand;
+
+    @Schema(description = "Модель", example = "6322") // Виправив приклад, щоб відповідати моделі
     private String model;
 
     @Schema(description = "Державний номерний знак", example = "АА4567ВВ")
@@ -34,9 +38,18 @@ public class VehicleResponseDTO {
     @Schema(description = "Поточний статус", example = "OPERATIONAL")
     private VehicleStatus status;
 
-    // Вкладений об'єкт
+    // Вкладений об'єкт (VehicleCategoryResponseDTO повинен існувати)
     @Schema(description = "Категорія техніки (повна інформація)")
     private VehicleCategoryResponseDTO category;
+
+    // === ВИПРАВЛЕННЯ КОМПІЛЯЦІЇ MAPSTRUCT ===
+    // Ці поля потрібні для успішної компіляції VehicleMapper.toDto:
+
+    @Schema(description = "ID категорії техніки (для швидкого доступу)", example = "1")
+    private Long categoryId;   // <--- Було відсутнє
+
+    @Schema(description = "Назва категорії (для відображення)", example = "Вантажний автомобіль")
+    private String categoryName; // <--- Було відсутнє
 
     // Інформація про водія
     @Schema(description = "ID закріпленого водія (або null)", example = "12")

@@ -17,7 +17,13 @@ import java.time.LocalDate;
 @Schema(description = "Дані для реєстрації нового транспортного засобу")
 public class VehicleCreateDTO {
 
-    @Schema(description = "Модель техніки", example = "КрАЗ-6322", requiredMode = Schema.RequiredMode.REQUIRED)
+    // ✅ ДОДАНО: Поле BRAND для усунення помилки NOT NULL
+    @Schema(description = "Марка (виробник) техніки", example = "КрАЗ", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(groups = OnCreate.class, message = "Марка (бренд) обов'язкова")
+    @Size(min = 2, max = 100, groups = OnCreate.class, message = "Довжина назви марки має бути від 2 до 100 символів")
+    private String brand;
+
+    @Schema(description = "Модель техніки", example = "6322", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(groups = OnCreate.class, message = "Модель обов'язкова")
     @Size(min = 2, max = 100, groups = OnCreate.class, message = "Довжина назви моделі має бути від 2 до 100 символів")
     private String model;
@@ -45,7 +51,7 @@ public class VehicleCreateDTO {
     @NotNull(groups = OnCreate.class, message = "Тип палива обов'язковий")
     private FuelType fuelType;
 
-    @Schema(description = "Поточний статус", example = "OPERATIONAL", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Поточний статус", example = "AVAILABLE", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(groups = OnCreate.class, message = "Статус техніки обов'язковий")
     private VehicleStatus status;
 

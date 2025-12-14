@@ -11,20 +11,15 @@ import java.util.Optional;
 public interface VehicleCategoryRepository extends JpaRepository<VehicleCategory, Long> {
 
     // === ТОЧНИЙ ПОШУК (Для логіки) ===
-
-    // Знайти по назві (ігноруючи регістр, щоб не створювати дублікатів через CapsLock)
     Optional<VehicleCategory> findByNameIgnoreCase(String name);
 
     Optional<VehicleCategory> findByCodeIgnoreCase(String code);
 
     // === ПЕРЕВІРКА ІСНУВАННЯ (Для валідації) ===
-
     boolean existsByNameIgnoreCase(String name);
 
     boolean existsByCodeIgnoreCase(String code);
 
     // === ПОШУК ДЛЯ КОРИСТУВАЧА (Фільтрація/Autocomplete) ===
-
-    // Знайти всі категорії, які містять в назві певний текст (напр. пошук "вантаж")
     List<VehicleCategory> findByNameContainingIgnoreCase(String namePart);
 }

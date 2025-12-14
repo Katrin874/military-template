@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="seed-001-categories" author="cadet">
+        <comment>Наповнення довідника категорій</comment>
+
+        <insert tableName="vehicle_categories">
+            <column name="name" value="Вантажні автомобілі"/>
+            <column name="code" value="TRUCK"/>
+            <column name="required_license" value="C"/>
+            <column name="max_load_capacity" valueNumeric="10000"/>
+        </insert>
+
+        <insert tableName="vehicle_categories">
+            <column name="name" value="Легкові автомобілі"/>
+            <column name="code" value="CAR"/>
+            <column name="required_license" value="B"/>
+            <column name="max_load_capacity" valueNumeric="500"/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

@@ -8,8 +8,7 @@ import ua.edu.viti.military.dto.request.DriverCreateDTO;
 import ua.edu.viti.military.dto.request.DriverUpdateDTO;
 import ua.edu.viti.military.dto.response.DriverResponseDTO;
 import ua.edu.viti.military.entity.Driver;
-import ua.edu.viti.military.exception.DuplicateResourceException;
-import ua.edu.viti.military.exception.ResourceNotFoundException;
+import ua.edu.viti.military.mapper.DriverMapper;
 import ua.edu.viti.military.repository.DriverRepository;
 
 import java.time.LocalDate;
@@ -23,108 +22,81 @@ import java.util.stream.Collectors;
 public class DriverService {
 
     private final DriverRepository driverRepository;
+    private final DriverMapper driverMapper; // Інжектимо маппер
 
     // === CREATE ===
     @Transactional
     public DriverResponseDTO create(DriverCreateDTO dto) {
-        log.info("Реєстрація водія: {} {}", dto.getLastName(), dto.getFirstName());
-
-        if (driverRepository.existsByMilitaryId(dto.getMilitaryId())) {
-            throw new DuplicateResourceException("Водій з військовим квитком " + dto.getMilitaryId() + " вже існує");
-        }
-
         if (driverRepository.existsByLicenseNumber(dto.getLicenseNumber())) {
-            throw new DuplicateResourceException("Водійське посвідчення " + dto.getLicenseNumber() + " вже зареєстроване");
+            throw new RuntimeException("Водій з номером прав " + dto.getLicenseNumber() + " вже існує");
         }
 
-        Driver driver = new Driver();
-        driver.setMilitaryId(dto.getMilitaryId());
-        driver.setFirstName(dto.getFirstName());
-        driver.setLastName(dto.getLastName());
-        driver.setMiddleName(dto.getMiddleName());
-        driver.setRank(dto.getRank());
-        driver.setLicenseNumber(dto.getLicenseNumber());
-        driver.setLicenseCategories(dto.getLicenseCategories());
-        driver.setLicenseExpiryDate(dto.getLicenseExpiryDate());
-        driver.setPhoneNumber(dto.getPhoneNumber());
-        driver.setIsActive(true);
+        // Використовуємо маппер для перетворення DTO -> Entity
+        Driver driver = driverMapper.toEntity(dto);
 
-        return toDTO(driverRepository.save(driver));
+        Driver saved = driverRepository.save(driver);
+
+        // Повертаємо DTO
+        return driverMapper.toResponseDTO(saved);
+    }
+
+    // === GET ALL + FILTER ===
+    public List<DriverResponseDTO> getAll(Boolean isActive) {
+        List<Driver> drivers;
+
+        if (isActive == null) {
+            drivers = driverRepository.findAll();
+        } else if (isActive) {
+            drivers = driverRepository.findByStatus("ACTIVE");
+        } else {
+            drivers = driverRepository.findByStatus("INACTIVE");
+        }
+
+        // Використовуємо маппер для списку
+        return driverMapper.toResponseDTOList(drivers);
+    }
+
+    // === GET BY ID ===
+    public DriverResponseDTO getById(Long id) {
+        Driver driver = driverRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Водій не знайдений з ID: " + id));
+
+        return driverMapper.toResponseDTO(driver);
     }
 
     // === UPDATE ===
     @Transactional
     public DriverResponseDTO update(Long id, DriverUpdateDTO dto) {
-        log.info("Оновлення даних водія ID: {}", id);
-
         Driver driver = driverRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Водія з ID " + id + " не знайдено"));
+                .orElseThrow(() -> new RuntimeException("Водій не знайдений з ID: " + id));
 
-        if (dto.getRank() != null) driver.setRank(dto.getRank());
-        if (dto.getLicenseNumber() != null) driver.setLicenseNumber(dto.getLicenseNumber());
-        if (dto.getLicenseCategories() != null) driver.setLicenseCategories(dto.getLicenseCategories());
-        if (dto.getLicenseExpiryDate() != null) driver.setLicenseExpiryDate(dto.getLicenseExpiryDate());
-        if (dto.getPhoneNumber() != null) driver.setPhoneNumber(dto.getPhoneNumber());
-        if (dto.getIsActive() != null) driver.setIsActive(dto.getIsActive());
+        // Використовуємо маппер для оновлення (MapStruct оновлює тільки ті поля, що є в DTO)
+        driverMapper.updateEntityFromDTO(dto, driver);
 
-        return toDTO(driverRepository.save(driver));
+        // Додаткова логіка для статусів (якщо переводимо в INACTIVE)
+        if (dto.getIsActive() != null && !dto.getIsActive()) {
+            driver.setStatus("INACTIVE");
+        } else if (dto.getIsActive() != null && dto.getIsActive()) {
+            driver.setStatus("ACTIVE");
+        }
+
+        Driver updated = driverRepository.save(driver);
+        return driverMapper.toResponseDTO(updated);
     }
 
-    // === DELETE ===
+    // === DELETE (Деактивація) ===
     @Transactional
     public void delete(Long id) {
-        log.info("Видалення водія ID: {}", id);
-
-        if (!driverRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Водія з ID " + id + " не знайдено");
-        }
+        // У бойових системах видаляти не можна, зазвичай змінюють статус
+        // Але тут ми просто видаляємо
         driverRepository.deleteById(id);
     }
 
-    // === READ ALL ===
-    public List<DriverResponseDTO> getAll(Boolean isActive) {
-        List<Driver> drivers;
-
-        if (isActive != null) {
-            drivers = driverRepository.findByIsActive(isActive);
-        } else {
-            drivers = driverRepository.findAll();
-        }
-
-        return drivers.stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
-    }
-
-    // === READ ONE ===
-    public DriverResponseDTO getById(Long id) {
-        Driver driver = driverRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Водія не знайдено"));
-        return toDTO(driver);
-    }
-
-    // === SPECIFIC REPORT ===
+    // === ЗВІТ (Додаткові бали) ===
     public List<DriverResponseDTO> getDriversWithExpiredLicenses() {
-        return driverRepository.findByLicenseExpiryDateBefore(LocalDate.now())
-                .stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
-    }
+        // Припускаємо, що в Entity Driver є поле licenseExpiryDate
+        List<Driver> expired = driverRepository.findByLicenseExpiryDateBefore(LocalDate.now());
 
-    // === MAPPER (Виправлено) ===
-    private DriverResponseDTO toDTO(Driver entity) {
-        return new DriverResponseDTO(
-                entity.getId(),
-                entity.getMilitaryId(),
-                entity.getFirstName(),
-                entity.getLastName(),
-                entity.getMiddleName(), // <--- ДОДАНО: По-батькові (було пропущено)
-                entity.getRank(),
-                entity.getLicenseNumber(),
-                entity.getLicenseCategories(),
-                entity.getLicenseExpiryDate(),
-                entity.getIsActive(),
-                entity.getCreatedAt()
-        );
+        return driverMapper.toResponseDTOList(expired);
     }
 }

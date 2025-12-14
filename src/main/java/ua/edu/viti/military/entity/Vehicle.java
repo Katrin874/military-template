@@ -2,6 +2,7 @@ package ua.edu.viti.military.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
@@ -13,64 +14,70 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "vehicles")
-@EntityListeners(AuditingEntityListener.class)
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@EntityListeners(AuditingEntityListener.class)
 public class Vehicle {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 100)
-    private String model; // Напр. КрАЗ-6322
+    // Змінили ім'я поля на registrationNumber (як очікує Сервіс)
+    @Column(name = "registration_number", nullable = false, unique = true)
+    private String registrationNumber;
 
-    @Column(nullable = false, unique = true, length = 20)
-    private String registrationNumber; // Напр. АА1234ВВ
+    @Column(nullable = false)
+    private String brand;
 
-    @Column(unique = true, length = 50)
+    @Column(nullable = false)
+    private String model;
+
+    @Column(name = "year_of_manufacture")
+    private Integer year;
+
+    // === Нові поля для ТО ===
+    @Column(name = "engine_number")
     private String engineNumber;
 
-    @Column(unique = true, length = 50)
+    @Column(name = "chassis_number")
     private String chassisNumber;
 
-    private Integer manufactureYear;
-
-    @Column(nullable = false)
-    private Integer mileage; // Пробіг (км)
-
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private FuelType fuelType; // DIESEL, PETROL...
+    @Column(name = "fuel_type")
+    private FuelType fuelType;
 
-    private Double fuelConsumption; // л/100км
+    @Column(name = "maintenance_interval_km")
+    private Integer maintenanceIntervalKm;
 
-    private Integer maintenanceIntervalKm; // Інтервал ТО (напр. 10000)
-
+    @Column(name = "last_maintenance_date")
     private LocalDate lastMaintenanceDate;
 
+    @Column(name = "last_maintenance_mileage")
     private Integer lastMaintenanceMileage;
+    // ========================
+
+    @Column(nullable = false)
+    private Integer mileage;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private VehicleStatus status; // OPERATIONAL, IN_MAINTENANCE...
+    private VehicleStatus status;
 
-    // === Зв'язки ===
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id", nullable = false)
+    @ManyToOne
+    @JoinColumn(name = "category_id")
     private VehicleCategory category;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "driver_id") // Може бути null
+    @ManyToOne
+    @JoinColumn(name = "driver_id")
     private Driver driver;
 
-    // Автоматичні дати
     @CreatedDate
-    @Column(nullable = false, updatable = false)
+    @Column(updatable = false)
     private LocalDateTime createdAt;
 
-    @LastModifiedDate
+    @LastModifiedDate // Автоматично оновлює дату при зміні запису
     private LocalDateTime updatedAt;
 }
